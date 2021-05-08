@@ -1,0 +1,2 @@
+Python 3.7.4: https://www.python.org/downloads/release/python-374/
+Platform Tools: https://developer.android.com/studio/releases/platform-tools
