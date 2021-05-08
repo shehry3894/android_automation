@@ -1,6 +1,6 @@
 import enum
 import time
-from typing import Union
+from typing import Union, List
 
 from dotmap import DotMap
 
@@ -20,7 +20,8 @@ PRESS_KEY = '{} shell input keyevent {}'
 
 KEYCODES = DotMap({
     'DEL': 'KEYCODE_DEL',
-    'MOVE_END': 'KEYCODE_MOVE_END'
+    'MOVE_END': 'KEYCODE_MOVE_END',
+    'BACK': 'KEYCODE_BACK'
 })
 
 
@@ -29,8 +30,9 @@ class ADB:
     def __init__(self, adb_path: str, device_addr: str):
         self.adb_path = adb_path
         self.device_addr = device_addr
-        # self.screen_w, self.screen_height = self.get_screen_size()
-        self.screen_w, self.screen_h = 1440, 2960
+        self.screen_w, self.screen_h = self.get_screen_size()
+        print('ss:', self.screen_w, self.screen_h)
+        # self.screen_w, self.screen_h = 1440, 2960
 
     def connect_device(self, tries: int = 3) -> bool:
         """
@@ -46,7 +48,8 @@ class ADB:
         return False
 
     def get_screen_size(self):
-        screen_size = exec_cmd(GET_SCREEN_SIZE.format(self.adb_path)).split(': ')[-1]
+        screen_size = exec_cmd(GET_SCREEN_SIZE.format(self.adb_path)).split(': ')[-1].replace('\\n', '').replace('\\r', '').replace('\'', '')
+        print_and_log(screen_size)
         w, h = screen_size.split('x')
         return int(w), int(h)
 
@@ -96,6 +99,25 @@ class ADB:
 
         return False
 
+    def are_texts_in_screen(self, txts: List, iterations: int = 5, wait_btw_each_iteration: int = 1) -> bool:
+        for _ in range(iterations):
+            screen_xml = self.get_screen_xml()
+            if screen_xml == "b''":
+                self.connect_emulator()
+            else:
+                found = []
+                for txt in txts:
+                    if txt in screen_xml:
+                        found.append(True)
+                    else:
+                        found.append(False)
+                if sum(found) == len(found):
+                    return True
+                    
+            time.sleep(wait_btw_each_iteration)
+
+        return False
+
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration: int = 500):
         exec_cmd(SWIPE_CMD.format(self.adb_path, x1, y1, x2, y2, duration))
 
@@ -106,6 +128,10 @@ class ADB:
     def press_end_key(self, num_presses: int = 1):
         for _ in range(0, num_presses):
             exec_cmd(PRESS_KEY.format(self.adb_path, KEYCODES.MOVE_END))
+    
+    def press_back_key(self, num_presses: int = 1):
+        for _ in range(0, num_presses):
+            exec_cmd(PRESS_KEY.format(self.adb_path, KEYCODES.BACK))
 
     def save_screenshot(self, file_path: str):
         exec_cmd('{} exec-out screencap -p > "{}"'.format(self.adb_path, file_path))
