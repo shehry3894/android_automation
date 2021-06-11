@@ -6,17 +6,7 @@ import lxml.etree as ET
 from utils.logger import print_and_log
 
 
-def find_els(xml: str, node_attr: str, node_attr_val: str):
-    matches = re.findall(r"=\\'(.*?)\\' resource", xml)
-    if len(matches):
-        for match in matches:
-            replaced_grp = match.replace('"', "in")
-            print(match, replaced_grp)
-            xml = xml.replace(match, replaced_grp)
-
-        xml = xml.replace("\\' resource", '" resource')
-        xml = xml.replace("=\\'", '="')
-
+def find_els(xml: str, node_attr: str, node_attr_val: str):    
     root = ET.fromstring(xml.encode())
     xpath = f".//node[@{node_attr}='{node_attr_val}']"
     return root.findall(xpath)

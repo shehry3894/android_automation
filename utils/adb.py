@@ -1,5 +1,6 @@
 import enum
 import time
+import os
 from typing import Union, List
 
 from dotmap import DotMap
@@ -12,8 +13,7 @@ CONNECTED_DEVICES_CMD = '{} devices'
 CONNECT_DEVICE_CMD = '{} connect {}'
 GET_SCREEN_SIZE = '{} shell wm size'
 SWIPE_CMD = '{} shell input touchscreen swipe {} {} {} {} {}'
-GET_SCREEN_XML_CMD = '{} shell uiautomator dump && adb pull /sdcard/window_dump.xml'
-READ_AND_DEL_DUMP = 'type window_dump.xml'
+DUMP_SCREEN_XML_CMD = '{} shell uiautomator dump && adb pull /sdcard/window_dump.xml'
 TAP_AT_XY_CMD = '{} shell input tap {} {}'
 ADD_TEXT = "{} shell input text '{}'"
 PRESS_KEY = '{} shell input keyevent {}'
@@ -23,6 +23,8 @@ KEYCODES = DotMap({
     'MOVE_END': 'KEYCODE_MOVE_END',
     'BACK': 'KEYCODE_BACK'
 })
+
+DUMPED_XML_NAME = 'window_dump.xml'
 
 
 class ADB:
@@ -48,23 +50,31 @@ class ADB:
         return False
 
     def get_screen_size(self):
-        screen_size = exec_cmd(GET_SCREEN_SIZE.format(self.adb_path)).split(': ')[-1].replace('\\n', '').replace('\\r', '').replace('\'', '')
-        print_and_log(screen_size)
+        screen_size = exec_cmd(GET_SCREEN_SIZE.format(self.adb_path))
+        print_and_log(f'screen_size: {screen_size}')
+        screen_size = screen_size.split(': ')[-1].replace('\\n', '').replace('\\r', '').replace('\'', '')
         w, h = screen_size.split('x')
         return int(w), int(h)
 
     def get_screen_xml(self, iters: int = 5, wait_btw_each_iter: int = 1) -> Union[None, str]:
+        # if os.path.exists(DUMPED_XML_NAME):
+        #     os.remove(DUMPED_XML_NAME)
+
         for _ in range(iters):
-            exec_cmd(GET_SCREEN_XML_CMD.format(self.adb_path))
-            page_src = exec_cmd(READ_AND_DEL_DUMP)
-            if 'xml' in page_src:
-                page_src = page_src.split('<hierarchy')[1]
-                page_src = '<hierarchy' + page_src
-                page_src = page_src.split('hierarchy>')[0]
-                page_src = page_src + 'hierarchy>'
-                return page_src
-            elif page_src == "b''" or page_src == 'b\'UI hierchary dumped to: /dev/tty\\n\'':
+            exec_cmd(DUMP_SCREEN_XML_CMD.format(self.adb_path))
+
+            if not os.path.exists(DUMPED_XML_NAME):
                 self.connect_device()
+                continue
+
+            with open(DUMPED_XML_NAME, 'r', encoding='utf-8') as f:
+                page_src = f.read()
+
+            if page_src == "b''" or page_src == 'b\'UI hierchary dumped to: /dev/tty\\n\'':
+                self.connect_device()
+            else:
+                return page_src
+
             time.sleep(wait_btw_each_iter)
 
     def swipe_until_txt_is_in_screen(self, txt: str, swipe_x1: int, swipe_y1: int, swipe_x2: int, swipe_y2: int,
@@ -75,8 +85,10 @@ class ADB:
             self.swipe(swipe_x1, swipe_y1, swipe_x2, swipe_y2, duration)
         return False
 
-    def tap_el(self, el_attr: str, el_attr_val: str, el_idx: int = 0):
-        screen_xml = self.get_screen_xml()
+    def tap_el(self, el_attr: str, el_attr_val: str, el_idx: int = 0, screen_xml: str=None):
+        if screen_xml is None:
+            screen_xml = self.get_screen_xml()
+        
         els = find_els(screen_xml, el_attr, el_attr_val)
         if len(els) > el_idx:
             x, y, _, _ = str_bounds_to_xyxy(els[el_idx].attrib['bounds'])
